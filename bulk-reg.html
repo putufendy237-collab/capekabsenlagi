@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistem Input Data Perangkat - Pemdes Pucaksari</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <style>
+        body { background: #1a1a1b; color: white; font-family: sans-serif; text-align: center; padding: 20px; }
+        .card { max-width: 500px; margin: auto; background: #2d2d2e; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; border: 1px solid #444; background: #111; color: white; box-sizing: border-box; }
+        .upload-area { border: 2px dashed #3498db; padding: 20px; margin: 20px 0; border-radius: 10px; cursor: pointer; }
+        #preview { width: 150px; height: 150px; object-fit: cover; border-radius: 50%; display: none; margin: 10px auto; border: 3px solid #3498db; }
+        button { background: #3498db; color: white; padding: 15px; border: none; width: 100%; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        #status-msg { margin-top: 20px; color: #f1c40f; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>INPUT DATA PERANGKAT</h2>
+        <p style="font-size: 0.8em; color: #aaa;">Gunakan foto formal menghadap depan</p>
+        
+        <input type="text" id="nama" placeholder="Nama Lengkap Perangkat">
+        <input type="text" id="jabatan" placeholder="Jabatan">
+        
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <p id="labelFoto">Klik untuk Pilih Foto</p>
+            <input type="file" id="fileInput" accept="image/*" style="display:none">
+            <img id="preview">
+        </div>
+
+        <button id="btnSimpan" onclick="generateAndSave()" disabled>SIMPAN KE DATABASE</button>
+        <div id="status-msg">Memuat AI... Mohon tunggu.</div>
+    </div>
+
+    <script>
+        const API_URL = "URL_APPS_SCRIPT_ANDA"; // <--- GANTI INI
+        const fileInput = document.getElementById('fileInput');
+        const preview = document.getElementById('preview');
+        const statusMsg = document.getElementById('status-msg');
+
+        // Load Model AI saat halaman dibuka
+        async function loadModels() {
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+            await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+            statusMsg.innerText = "Sistem AI Siap.";
+            document.getElementById('btnSimpan').disabled = false;
+        }
+
+        // Preview Foto saat dipilih
+        fileInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = 'block';
+                document.getElementById('labelFoto').style.display = 'none';
+            }
+        });
+
+        async function generateAndSave() {
+            const nama = document.getElementById('nama').value;
+            const jabatan = document.getElementById('jabatan').value;
+            
+            if (!nama || !jabatan || !fileInput.files[0]) {
+                return alert("Lengkapi Nama, Jabatan, dan Foto!");
+            }
+
+            statusMsg.innerText = "Sedang menganalisis wajah...";
+            document.getElementById('btnSimpan').disabled = true;
+
+            // Deteksi Wajah dari Foto
+            const img = await faceapi.createCanvasFromMedia(preview);
+            const detection = await faceapi.detectSingleFace(preview, new faceapi.TinyFaceDetectorOptions())
+                                           .withFaceLandmarks()
+                                           .withFaceDescriptor();
+
+            if (!detection) {
+                statusMsg.innerText = "GAGAL: Wajah tidak ditemukan dalam foto!";
+                document.getElementById('btnSimpan').disabled = false;
+                return;
+            }
+
+            const payload = {
+                nama: nama,
+                jabatan: jabatan,
+                descriptor: JSON.stringify(Array.from(detection.descriptor))
+            };
+
+            statusMsg.innerText = "Mengirim data ke Google Sheets...";
+
+            // Kirim ke Google Apps Script
+            try {
+                await fetch(API_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    body: JSON.stringify(payload)
+                });
+                
+                statusMsg.style.color = "#2ecc71";
+                statusMsg.innerText = "BERHASIL: Data " + nama + " tersimpan!";
+                
+                // Reset Form
+                document.getElementById('nama').value = "";
+                document.getElementById('jabatan').value = "";
+                preview.style.display = 'none';
+                document.getElementById('labelFoto').style.display = 'block';
+                fileInput.value = "";
+            } catch (err) {
+                statusMsg.innerText = "Gagal mengirim: " + err;
+            }
+            document.getElementById('btnSimpan').disabled = false;
+        }
+
+        loadModels();
+    </script>
+</body>
+</html>

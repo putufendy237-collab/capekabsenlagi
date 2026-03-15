@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrasi Wajah Perangkat Desa</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <style>
+        body { background: #1a1a1b; color: white; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 20px; }
+        .reg-box { max-width: 400px; margin: auto; background: #2d2d2e; padding: 20px; border-radius: 15px; }
+        input { width: 90%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; }
+        #video { width: 100%; border-radius: 10px; background: black; transform: scaleX(-1); }
+        .btn-reg { background: #3498db; color: white; padding: 15px; border: none; width: 100%; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .btn-reg:disabled { background: #555; }
+        #status { margin-top: 15px; font-size: 0.9em; color: #f1c40f; }
+    </style>
+</head>
+<body>
+
+    <div class="reg-box">
+        <h3>REGISTRASI PERANGKAT</h3>
+        <video id="video" autoplay muted playsinline></video>
+        
+        <input type="text" id="nama" placeholder="Nama Lengkap">
+        <input type="text" id="jabatan" placeholder="Jabatan (contoh: Sekdes)">
+        
+        <button id="btnDaftar" class="btn-reg" onclick="prosesDaftar()" disabled>REKAM WAJAH</button>
+        <p id="status">Memuat AI...</p>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const GAS_URL = "URL_APPS_SCRIPT_ANDA_DI_SINI"; // Ganti dengan URL Apps Script Anda
+
+        async function init() {
+            // Load model AI yang lebih akurat untuk registrasi
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+            await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+            await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+            await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
+            const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+            video.srcObject = stream;
+            
+            document.getElementById('status').innerText = "AI Siap. Masukkan nama dan jabatan.";
+            document.getElementById('btnDaftar').disabled = false;
+        }
+
+        async function prosesDaftar() {
+            const nama = document.getElementById('nama').value;
+            const jabatan = document.getElementById('jabatan').value;
+            const statusLabel = document.getElementById('status');
+
+            if (!nama || !jabatan) return alert("Isi nama dan jabatan!");
+
+            statusLabel.innerText = "Menganalisis wajah... Jangan bergerak.";
+            
+            // Ambil descriptor wajah (kode unik wajah)
+            const deteksi = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                                         .withFaceLandmarks()
+                                         .withFaceDescriptor();
+
+            if (!deteksi) {
+                statusLabel.innerText = "Wajah tidak terdeteksi. Pastikan pencahayaan cukup.";
+                return;
+            }
+
+            const payload = {
+                nama: nama,
+                jabatan: jabatan,
+                descriptor: JSON.stringify(Array.from(deteksi.descriptor))
+            };
+
+            // Kirim ke Google Sheets via Apps Script
+            statusLabel.innerText = "Menyimpan ke Database Desa...";
+            
+            fetch(GAS_URL, {
+                method: "POST",
+                mode: "no-cors",
+                body: JSON.stringify(payload)
+            }).then(() => {
+                statusLabel.innerText = "BERHASIL! " + nama + " sudah terdaftar.";
+                document.getElementById('nama').value = "";
+                document.getElementById('jabatan').value = "";
+            }).catch(err => alert("Error: " + err));
+        }
+
+        init();
+    </script>
+</body>
+</html>
